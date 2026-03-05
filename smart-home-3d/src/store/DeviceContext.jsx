@@ -39,12 +39,14 @@ export const DeviceProvider = ({ children }) => {
       timestamp: Date.now(),
     };
 
-    console.log('[Mock API] POST /device-event payload:', payload);
+    console.log('[API] POST /device-event payload:', payload);
 
     try {
-      // In a real scenario, this would be a real fetch call:
-      // await fetch('/device-event', { method: 'POST', body: JSON.stringify(payload) });
-      await new Promise(resolve => setTimeout(resolve, 100)); // Simulate network latency
+      await fetch('http://localhost:3000/device-event', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload) 
+      });
     } catch (error) {
       console.error('Failed to post device event', error);
     }
