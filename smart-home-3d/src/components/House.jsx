@@ -59,7 +59,7 @@ const House = () => {
 
       {/* Kitchen */}
       <Light deviceId="light_kitchen" position={[2.5, 0, 2.5]} />
-      <Refrigerator deviceId="fridge_kitchen" position={[4.0, 0, 4.0]} rotation={[0, -Math.PI / 4, 0]} />
+      <Refrigerator deviceId="fridge_kitchen" position={[4.0, 0, 4.3]} rotation={[0, -Math.PI / 2, 0]} />
       
     </group>
   );
