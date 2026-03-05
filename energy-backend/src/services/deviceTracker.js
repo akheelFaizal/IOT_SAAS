@@ -1,3 +1,5 @@
+const db = require('../db/postgres');
+
 // Maintains the state and total runtime of each device
 class DeviceTracker {
   constructor() {
@@ -57,9 +59,41 @@ class DeviceTracker {
         if (device.last_turned_on_time !== null) {
           const uptime = timestamp - device.last_turned_on_time;
           device.total_uptime_ms += (uptime > 0 ? uptime : 0);
+          
+          if (uptime > 0) {
+            this.saveSessionToDb(deviceId, device.power_rating_watts, device.last_turned_on_time, timestamp, uptime);
+          }
+          
           device.last_turned_on_time = null;
         }
       }
+    }
+  }
+
+  async saveSessionToDb(deviceId, powerRatingWatts, turnedOnTimeMs, turnedOffTimeMs, durationMs) {
+    const durationSeconds = Math.round(durationMs / 1000);
+    const durationHours = durationMs / (1000 * 60 * 60);
+    const energyKwh = (powerRatingWatts * durationHours) / 1000;
+
+    const query = `
+      INSERT INTO device_usage_sessions 
+      (device_id, power_rating_watts, turned_on_at, turned_off_at, duration_seconds, energy_kwh)
+      VALUES ($1, $2, to_timestamp($3), to_timestamp($4), $5, $6)
+    `;
+    const values = [
+      deviceId, 
+      powerRatingWatts, 
+      turnedOnTimeMs / 1000.0, 
+      turnedOffTimeMs / 1000.0, 
+      durationSeconds, 
+      energyKwh
+    ];
+
+    try {
+      await db.query(query, values);
+      console.log(`[DB Insert] Saved session for ${deviceId}: ${energyKwh.toFixed(4)} kWh`);
+    } catch (err) {
+      console.error(`[DB Error] Failed to save session for ${deviceId}:`, err);
     }
   }
 

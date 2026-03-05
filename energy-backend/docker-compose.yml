@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: smart_home_db_v2
+    restart: always
+    environment:
+      POSTGRES_USER: energy_user
+      POSTGRES_PASSWORD: energy_pass
+      POSTGRES_DB: smart_home_energy
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_v2:/var/lib/postgresql/data
+
+volumes:
+  postgres_data_v2:

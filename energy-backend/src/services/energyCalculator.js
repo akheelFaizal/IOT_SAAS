@@ -1,4 +1,5 @@
 const deviceTracker = require('./deviceTracker');
+const db = require('../db/postgres');
 
 class EnergyCalculator {
 
@@ -13,35 +14,54 @@ class EnergyCalculator {
   }
 
   /**
-   * Aggregates total units (kWh) consumed
-   * Note: In a real system, daily/monthly splits would require 
-   * storing historical logs by day/month. For this simulation,
-   * we'll treat the total accumulated as "monthly" and a fraction 
-   * of it as "daily" (or just return total as both for demo purposes,
-   * but let's simulate a standard realistic output).
+   * Fetch aggregated consumption from Postgres + add any active (live) usage 
+   * since the last time the DB was updated (when devices were turned ON but not yet OFF).
    */
-  calculateTotalConsumption() {
-    const devices = deviceTracker.getDevicesSnapshot();
-    let totalKwh = 0;
+  async getConsumptionAggregates() {
+    // 1. Get historical daily/monthly totals from DB
+    let dailyDbKwh = 0;
+    let monthlyDbKwh = 0;
     
-    devices.forEach(device => {
-      totalKwh += this.calculateDeviceEnergy(device);
+    try {
+        const query = `
+          SELECT 
+            SUM(CASE WHEN DATE(turned_on_at) = CURRENT_DATE THEN energy_kwh ELSE 0 END) as daily_kwh,
+            SUM(CASE WHEN DATE_TRUNC('month', turned_on_at) = DATE_TRUNC('month', CURRENT_DATE) THEN energy_kwh ELSE 0 END) as monthly_kwh
+          FROM device_usage_sessions
+        `;
+        const res = await db.query(query);
+        if (res.rows.length > 0) {
+            dailyDbKwh = parseFloat(res.rows[0].daily_kwh) || 0;
+            monthlyDbKwh = parseFloat(res.rows[0].monthly_kwh) || 0;
+        }
+    } catch (err) {
+        console.error('[DB Error] Failed to aggregate consumption:', err);
+    }
+
+    // 2. Add in-memory active tracking 
+    // (for devices currently ON, whose sessions haven't been inserted to DB yet)
+    let liveKwh = 0;
+    const devicesSnapshot = deviceTracker.getDevicesSnapshot();
+    
+    devicesSnapshot.forEach(device => {
+      // Only care about the *active* session portion that isn't in DB yet. 
+      // getDevicesSnapshot() returns total_usage_time_hours since server boot. 
+      // To be strictly correct across restarts, we should look at active time 
+      // Since we just want live feedback to update, calculating energy since last_turned_on_time is better.
+      const internalDevice = deviceTracker.devices.get(device.device_id);
+      if (internalDevice && internalDevice.state && internalDevice.last_turned_on_time) {
+          const uptimeMs = Date.now() - internalDevice.last_turned_on_time;
+          const uptimeHours = (uptimeMs > 0 ? uptimeMs : 0) / (1000 * 60 * 60);
+          liveKwh += (internalDevice.power_rating_watts * uptimeHours) / 1000;
+      }
     });
 
-    // For simulation scaling (so user doesn't wait hours to see 1 unit):
-    // Let's apply a "time multiplier" so 1 real minute = 1 simulated day.
-    // For now, we will just return the raw calculated total.
-    // NOTE: In the demo, since we want to hit 200 units quickly, 
-    // we multiply by a high simulation factor.
-    const SIMULATION_MULTIPLIER = 10000; // Speeds up time effectively
-    
-    const simulatedTotalUnits = totalKwh * SIMULATION_MULTIPLIER;
+    const totalDaily = dailyDbKwh + liveKwh;
+    const totalMonthly = monthlyDbKwh + liveKwh;
 
     return {
-      total_units: simulatedTotalUnits,
-      // Mocking daily as a fraction of total for API schema matching
-      daily_units: simulatedTotalUnits > 0 ? simulatedTotalUnits / 30 : 0, 
-      monthly_units: simulatedTotalUnits
+      daily_units: totalDaily,
+      monthly_units: totalMonthly
     };
   }
 

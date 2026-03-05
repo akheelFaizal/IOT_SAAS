@@ -4,6 +4,7 @@ const cors = require('cors');
 const deviceTracker = require('./services/deviceTracker');
 const energyCalculator = require('./services/energyCalculator');
 const tariffCalculator = require('./services/tariffCalculator');
+const db = require('./db/postgres');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,8 +29,8 @@ app.post('/device-event', (req, res) => {
 });
 
 // Endpoint to retrieve energy stats and estimated bill
-app.get('/energy-summary', (req, res) => {
-  const consumptionStats = energyCalculator.calculateTotalConsumption();
+app.get('/energy-summary', async (req, res) => {
+  const consumptionStats = await energyCalculator.getConsumptionAggregates();
   const totalUnits = consumptionStats.monthly_units;
   
   const activeDevices = energyCalculator.getActiveDevices();
@@ -53,6 +54,7 @@ app.get('/devices', (req, res) => {
    res.status(200).json(deviceTracker.getDevicesSnapshot());
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await db.initDB();
   console.log(`Energy Backend Engine listening on http://localhost:${PORT}`);
 });
