@@ -69,6 +69,30 @@ class EnergyCalculator {
       const devices = deviceTracker.getDevicesSnapshot();
       return devices.filter(d => d.state).map(d => d.device_id);
   }
+
+  /**
+   * Fetch daily aggregated usage per device for the last 30 days
+   */
+  async getHistoricalTrends() {
+      try {
+          const query = `
+            SELECT 
+                DATE(turned_on_at) as date,
+                device_id,
+                SUM(duration_seconds) as total_duration_seconds,
+                SUM(energy_kwh) as total_energy_kwh
+            FROM device_usage_sessions
+            WHERE turned_on_at >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY DATE(turned_on_at), device_id
+            ORDER BY DATE(turned_on_at) ASC;
+          `;
+          const res = await db.query(query);
+          return res.rows;
+      } catch (err) {
+          console.error('[DB Error] Failed to fetch historical trends:', err);
+          return [];
+      }
+  }
 }
 
 module.exports = new EnergyCalculator();

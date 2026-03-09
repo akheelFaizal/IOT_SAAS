@@ -29,7 +29,7 @@ const UIOverlay = () => {
 
   return (
     <div className="absolute top-0 left-0 w-full h-full pointer-events-none p-6 z-10 flex flex-col justify-between">
-      <div className="flex justify-between items-start">
+      <div className="flex gap-4 justify-between items-start">
         <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-4 border border-slate-700 shadow-2xl max-w-sm pointer-events-auto flex flex-col gap-4">
           <div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-2">
@@ -42,6 +42,13 @@ const UIOverlay = () => {
               <Power size={16} />
               <span>{activeCount} devices active</span>
             </div>
+
+            <button 
+               onClick={() => window.location.href = '/dashboard'}
+               className="mt-2 w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition-colors text-white text-sm font-semibold rounded-lg shadow-lg flex items-center justify-center gap-2"
+            >
+               View Advanced Analytics
+            </button>
           </div>
 
           {energySummary && (
@@ -72,7 +79,7 @@ const UIOverlay = () => {
           )}
         </div>
 
-         <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-4 border border-slate-700 shadow-2xl pointer-events-auto max-w-xs">
+        <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-4 border border-slate-700 shadow-2xl pointer-events-auto max-w-xs">
           <div className="flex items-center gap-2 mb-3">
             <Info size={18} className="text-blue-400" />
             <span className="font-semibold">Rooms</span>

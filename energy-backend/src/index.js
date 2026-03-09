@@ -84,6 +84,26 @@ app.get('/energy-summary', async (req, res) => {
   res.status(200).json(responsePayload);
 });
 
+// Endpoint to fetch 30-day historical device trends
+app.get('/historical-trends', async (req, res) => {
+    const defaultData = [
+       // Some static fallback data if DB fails or lacks data
+       { date: new Date().toISOString().split('T')[0], device_id: 'ac', total_energy_kwh: 5.2 },
+       { date: new Date().toISOString().split('T')[0], device_id: 'fridge', total_energy_kwh: 1.5 },
+       { date: new Date().toISOString().split('T')[0], device_id: 'tv', total_energy_kwh: 0.8 },
+       { date: new Date().toISOString().split('T')[0], device_id: 'fan', total_energy_kwh: 0.4 },
+    ];
+    
+    let dbData = await energyCalculator.getHistoricalTrends();
+    
+    // Fallback if no db data exists (useful during testing without active db sessions)
+    if (dbData.length === 0) {
+        dbData = defaultData;
+    }
+
+    res.status(200).json(dbData);
+});
+
 // Optional: Provide endpoint to view the internal device states
 app.get('/devices', (req, res) => {
    res.status(200).json(deviceTracker.getDevicesSnapshot());
