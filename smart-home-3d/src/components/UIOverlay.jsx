@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDevices } from '../store/DeviceContext';
 import { Lightbulb, Info, Power, Zap, AlertTriangle } from 'lucide-react';
+import AnalyticsDashboard from './AnalyticsDashboard';
 
 const UIOverlay = () => {
   const { devices } = useDevices();
@@ -71,7 +72,7 @@ const UIOverlay = () => {
           )}
         </div>
 
-        <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-4 border border-slate-700 shadow-2xl pointer-events-auto max-w-xs">
+         <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-4 border border-slate-700 shadow-2xl pointer-events-auto max-w-xs">
           <div className="flex items-center gap-2 mb-3">
             <Info size={18} className="text-blue-400" />
             <span className="font-semibold">Rooms</span>
@@ -82,6 +83,13 @@ const UIOverlay = () => {
             <li>• Bedroom (Back Left)</li>
             <li>• Bathroom (Back Right)</li>
           </ul>
+        </div>
+        
+        {/* ML AI Analytics Rendering */}
+        <div className="ml-auto pointer-events-auto max-w-sm">
+           {energySummary && energySummary.ai_insights && (
+             <AnalyticsDashboard data={energySummary.ai_insights} />
+           )}
         </div>
       </div>
     </div>

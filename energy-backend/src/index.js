@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 
 const deviceTracker = require('./services/deviceTracker');
 const energyCalculator = require('./services/energyCalculator');
@@ -37,6 +38,39 @@ app.get('/energy-summary', async (req, res) => {
   const estimatedBill = tariffCalculator.calculateEstimatedBill(totalUnits);
   const alerts = tariffCalculator.generateAlerts(totalUnits, activeDevices);
 
+  // Call ML Service for AI predictions
+  let mlPredictions = null;
+  try {
+     const devicesSnapshot = deviceTracker.getDevicesSnapshot();
+     // Map device snapshots to ML input format
+     const mlDevices = devicesSnapshot.map(d => {
+        let type = 'Lighting';
+        if (d.device_id.includes('ac')) type = 'AC';
+        if (d.device_id.includes('fridge')) type = 'Refrigerator';
+        if (d.device_id.includes('fan')) type = 'Fan';
+        if (d.device_id.includes('tv')) type = 'TV';
+        
+        return {
+          device: type,
+          hours: d.usage_time_hours || 0,
+          power: d.power_rating_watts || 100,
+          room: 'living_room'
+        };
+     });
+     
+     if (mlDevices.length > 0) {
+        const mlResponse = await axios.post('http://localhost:8000/predict-consumption', {
+           devices: mlDevices,
+           temperature: 28.0,
+           day_of_week: "weekday",
+           time_of_day: "evening"
+        });
+        mlPredictions = mlResponse.data;
+     }
+  } catch (error) {
+     console.error('Failed to get ML predictions:', error.message);
+  }
+
   // Example structured response
   const responsePayload = {
     daily_units: parseFloat(consumptionStats.daily_units.toFixed(2)),
@@ -44,6 +78,7 @@ app.get('/energy-summary', async (req, res) => {
     estimated_bill: parseFloat(estimatedBill.toFixed(2)),
     active_devices: activeDevices,
     alerts: alerts,
+    ai_insights: mlPredictions
   };
 
   res.status(200).json(responsePayload);
