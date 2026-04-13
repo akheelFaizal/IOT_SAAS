@@ -97,6 +97,20 @@ class DeviceTracker {
     }
   }
 
+  async logTelemetry(deviceId, powerConsumptionWatts, status) {
+    const query = `
+      INSERT INTO telemetry (device_id, power_consumption, status)
+      VALUES ($1, $2, $3)
+    `;
+    const values = [deviceId, powerConsumptionWatts, status];
+
+    try {
+      await db.query(query, values);
+    } catch (err) {
+      console.error(`[DB Error] Failed to log telemetry for ${deviceId}:`, err);
+    }
+  }
+
   /**
    * Returns a snapshot of all devices, including dynamically calculating
    * the uptime for devices that are currently ON up to 'now'.

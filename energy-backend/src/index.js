@@ -1,11 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 const deviceTracker = require('./services/deviceTracker');
 const energyCalculator = require('./services/energyCalculator');
 const tariffCalculator = require('./services/tariffCalculator');
-const db = require('./db/postgres');
+const simulationService = require('./services/simulationService');
+const { pool, initDB } = require('./db/postgres');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,103 +17,169 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Endpoint to receive state toggle events from the 3D application
-app.post('/device-event', (req, res) => {
-  const { device, state, timestamp } = req.body;
+// --- Authentication Middleware ---
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-  if (!device || !state || !timestamp) {
-    return res.status(400).json({ error: 'Missing required fields: device, state, timestamp' });
-  }
+    if (!token) return res.status(401).json({ message: 'No token provided' });
 
-  deviceTracker.updateDeviceState(device, state, timestamp);
-  
-  // Log event
-  console.log(`[Event Received] Device: ${device} -> State: ${state}`);
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ message: 'Token is invalid or expired' });
+        req.user = user;
+        next();
+    });
+};
 
-  res.status(200).json({ success: true, message: `Updated state for ${device}` });
+// --- Auth Routes ---
+
+// Signup
+app.post('/api/auth/signup', async (req, res) => {
+    const { name, email, password } = req.body;
+    try {
+        const userExists = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (userExists.rows.length > 0) {
+            return res.status(400).json({ message: 'User already exists with this email' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const newUser = await pool.query(
+            'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email',
+            [name, email, hashedPassword]
+        );
+
+        const token = jwt.sign({ id: newUser.rows[0].id, email: newUser.rows[0].email }, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+        res.status(201).json({ token, user: newUser.rows[0] });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error during signup' });
+    }
 });
 
-// Endpoint to retrieve energy stats and estimated bill
-app.get('/energy-summary', async (req, res) => {
-  const consumptionStats = await energyCalculator.getConsumptionAggregates();
-  const totalUnits = consumptionStats.monthly_units;
-  
-  const activeDevices = energyCalculator.getActiveDevices();
-  const estimatedBill = tariffCalculator.calculateEstimatedBill(totalUnits);
-  const alerts = tariffCalculator.generateAlerts(totalUnits, activeDevices);
+// Login
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (user.rows.length === 0) {
+            return res.status(400).json({ message: 'Invalid credentials' });
+        }
 
-  // Call ML Service for AI predictions
-  let mlPredictions = null;
+        const validPassword = await bcrypt.compare(password, user.rows[0].password_hash);
+        if (!validPassword) {
+            return res.status(400).json({ message: 'Invalid credentials' });
+        }
+
+        const token = jwt.sign({ id: user.rows[0].id, email: user.rows[0].email }, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+        res.json({
+            token,
+            user: {
+                id: user.rows[0].id,
+                name: user.rows[0].name,
+                email: user.rows[0].email
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error during login' });
+    }
+});
+
+// --- IoT Protected Routes ---
+
+app.post('/device-event', (req, res) => {
+  const { device, state, timestamp } = req.body;
+  if (!device || !state || !timestamp) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  deviceTracker.updateDeviceState(device, state, timestamp);
+  res.status(200).json({ success: true });
+});
+
+app.get('/energy-summary', authenticateToken, async (req, res) => {
   try {
-     const devicesSnapshot = deviceTracker.getDevicesSnapshot();
-     // Map device snapshots to ML input format
-     const mlDevices = devicesSnapshot.map(d => {
-        let type = 'Lighting';
-        if (d.device_id.includes('ac')) type = 'AC';
-        if (d.device_id.includes('fridge')) type = 'Refrigerator';
-        if (d.device_id.includes('fan')) type = 'Fan';
-        if (d.device_id.includes('tv')) type = 'TV';
-        
-        return {
-          device: type,
+    const consumptionStats = await energyCalculator.getConsumptionAggregates();
+    const totalUnits = consumptionStats.monthly_units;
+    const activeDevices = energyCalculator.getActiveDevices();
+    const estimatedBill = tariffCalculator.calculateEstimatedBill(totalUnits);
+    const alerts = tariffCalculator.generateAlerts(totalUnits, activeDevices);
+
+    let mlPredictions = null;
+    try {
+       const devicesSnapshot = deviceTracker.getDevicesSnapshot();
+       const mlDevices = devicesSnapshot.map(d => ({
+          device: d.device_id.includes('ac') ? 'AC' : d.device_id.includes('fridge') ? 'Refrigerator' : 'Lighting',
           hours: d.usage_time_hours || 0,
           power: d.power_rating_watts || 100,
           room: 'living_room'
-        };
-     });
-     
-     if (mlDevices.length > 0) {
-        const mlResponse = await axios.post('http://localhost:8001/predict-consumption', {
-           devices: mlDevices,
-           temperature: 28.0,
-           day_of_week: "weekday",
-           time_of_day: "evening"
-        });
-        mlPredictions = mlResponse.data;
-     }
-  } catch (error) {
-     console.error('Failed to get ML predictions:', error.message);
-  }
-
-  // Example structured response
-  const responsePayload = {
-    daily_units: parseFloat(consumptionStats.daily_units.toFixed(2)),
-    monthly_units: parseFloat(consumptionStats.monthly_units.toFixed(2)),
-    estimated_bill: parseFloat(estimatedBill.toFixed(2)),
-    active_devices: activeDevices,
-    alerts: alerts,
-    ai_insights: mlPredictions
-  };
-
-  res.status(200).json(responsePayload);
-});
-
-// Endpoint to fetch 30-day historical device trends
-app.get('/historical-trends', async (req, res) => {
-    const defaultData = [
-       // Some static fallback data if DB fails or lacks data
-       { date: new Date().toISOString().split('T')[0], device_id: 'ac', total_energy_kwh: 5.2 },
-       { date: new Date().toISOString().split('T')[0], device_id: 'fridge', total_energy_kwh: 1.5 },
-       { date: new Date().toISOString().split('T')[0], device_id: 'tv', total_energy_kwh: 0.8 },
-       { date: new Date().toISOString().split('T')[0], device_id: 'fan', total_energy_kwh: 0.4 },
-    ];
-    
-    let dbData = await energyCalculator.getHistoricalTrends();
-    
-    // Fallback if no db data exists (useful during testing without active db sessions)
-    if (dbData.length === 0) {
-        dbData = defaultData;
+       }));
+       
+       if (mlDevices.length > 0) {
+          const mlResponse = await axios.post('http://localhost:8001/predict-consumption', {
+             devices: mlDevices,
+             temperature: 28.0,
+             day_of_week: "weekday",
+             time_of_day: "evening"
+          });
+          mlPredictions = mlResponse.data;
+       }
+    } catch (error) {
+       console.error('ML Service Error');
     }
 
-    res.status(200).json(dbData);
+    res.json({
+      daily_units: parseFloat(consumptionStats.daily_units.toFixed(2)),
+      monthly_units: parseFloat(consumptionStats.monthly_units.toFixed(2)),
+      estimated_bill: parseFloat(estimatedBill.toFixed(2)),
+      active_devices: activeDevices,
+      alerts: alerts,
+      ai_insights: mlPredictions
+    });
+  } catch (err) {
+    res.status(500).send('Database Error');
+  }
 });
 
-// Optional: Provide endpoint to view the internal device states
-app.get('/devices', (req, res) => {
-   res.status(200).json(deviceTracker.getDevicesSnapshot());
+app.get('/historical-trends', authenticateToken, async (req, res) => {
+    let dbData = await energyCalculator.getHistoricalTrends();
+    res.json(dbData);
+});
+
+// Get all devices
+app.get('/api/devices', authenticateToken, (req, res) => {
+    const devices = deviceTracker.getDevicesSnapshot();
+    res.json(devices);
+});
+
+// Get recent telemetry
+app.get('/api/telemetry', authenticateToken, async (req, res) => {
+    const { device_id, limit = 100 } = req.query;
+    try {
+        let query = 'SELECT * FROM telemetry';
+        let values = [];
+        
+        if (device_id) {
+            query += ' WHERE device_id = $1';
+            values.push(device_id);
+        }
+        
+        query += ' ORDER BY timestamp DESC LIMIT $' + (values.length + 1);
+        values.push(limit);
+        
+        const result = await pool.query(query, values);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error fetching telemetry' });
+    }
 });
 
 app.listen(PORT, async () => {
-  await db.initDB();
-  console.log(`Energy Backend Engine listening on http://localhost:${PORT}`);
+  await initDB();
+  simulationService.start();
+  console.log(`Server listening on http://localhost:${PORT}`);
 });

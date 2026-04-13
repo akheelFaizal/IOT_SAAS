@@ -1,19 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import { useDevices } from '../store/DeviceContext';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../store/AuthContext';
 import { Lightbulb, Info, Power, Zap, AlertTriangle } from 'lucide-react';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import { useNavigate } from 'react-router-dom';
+import { useDevices } from '../store/DeviceContext';
+import { useState } from 'react';
+import { useEffect } from 'react';
 
 const UIOverlay = () => {
   const navigate = useNavigate();
   const { devices } = useDevices();
+  const { token } = useAuth();
   const activeCount = devices.filter((d) => d.state).length;
   const [energySummary, setEnergySummary] = useState(null);
 
   useEffect(() => {
     const fetchEnergyData = async () => {
+      if (!token) return;
       try {
-        const res = await fetch('http://localhost:3000/energy-summary');
+        const res = await fetch('http://localhost:3000/energy-summary', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (res.ok) {
           const data = await res.json();
           setEnergySummary(data);

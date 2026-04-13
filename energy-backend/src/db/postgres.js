@@ -28,7 +28,31 @@ const pool = new Pool({
         );
         `;
         
+        const createUsersTableQuery = `
+        CREATE TABLE IF NOT EXISTS users (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(100) NOT NULL,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(50) DEFAULT 'user',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        `;
+
+        const createTelemetryTableQuery = `
+        CREATE TABLE IF NOT EXISTS telemetry (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            device_id TEXT NOT NULL,
+            timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            power_consumption DECIMAL NOT NULL,
+            status TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        `;
+        
         await client.query(createTableQuery);
+        await client.query(createUsersTableQuery);
+        await client.query(createTelemetryTableQuery);
         console.log('[Postgres] Database initialization complete.');
     } catch (err) {
         console.error('[Postgres] Initialization Error:', err);
