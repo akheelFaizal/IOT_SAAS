@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useDevices } from '../store/DeviceContext';
+import { useNavigate } from 'react-router-dom';
 import { Lightbulb, Info, Power, Zap, AlertTriangle } from 'lucide-react';
 import AnalyticsDashboard from './AnalyticsDashboard';
 
 const UIOverlay = () => {
+  const navigate = useNavigate();
   const { devices } = useDevices();
   const activeCount = devices.filter((d) => d.state).length;
   const [energySummary, setEnergySummary] = useState(null);
@@ -44,7 +46,7 @@ const UIOverlay = () => {
             </div>
 
             <button 
-               onClick={() => window.location.href = '/dashboard'}
+               onClick={() => navigate('/dashboard')}
                className="mt-2 w-full py-2 bg-indigo-600 hover:bg-indigo-500 transition-colors text-white text-sm font-semibold rounded-lg shadow-lg flex items-center justify-center gap-2"
             >
                View Advanced Analytics

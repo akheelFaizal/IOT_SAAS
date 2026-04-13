@@ -59,7 +59,7 @@ app.get('/energy-summary', async (req, res) => {
      });
      
      if (mlDevices.length > 0) {
-        const mlResponse = await axios.post('http://localhost:8000/predict-consumption', {
+        const mlResponse = await axios.post('http://localhost:8001/predict-consumption', {
            devices: mlDevices,
            temperature: 28.0,
            day_of_week: "weekday",

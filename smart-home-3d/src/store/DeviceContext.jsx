@@ -18,6 +18,28 @@ const DeviceContext = createContext(null);
 
 export const DeviceProvider = ({ children }) => {
   const [devices, setDevices] = useState(initialDevices);
+  const [initLoaded, setInitLoaded] = useState(false);
+
+  React.useEffect(() => {
+    const fetchInitialStates = async () => {
+      try {
+        const res = await fetch('http://localhost:3000/devices');
+        if (res.ok) {
+          const cloudDevices = await res.json();
+          // Merge local initial config with backend states
+          setDevices(prev => prev.map(localDev => {
+            const remoteDev = cloudDevices.find(d => d.device_id === localDev.device_id);
+            return remoteDev ? { ...localDev, state: remoteDev.state === 'on' } : localDev;
+          }));
+          setInitLoaded(true);
+        }
+      } catch (err) {
+        console.error("Failed to fetch initial device states", err);
+      }
+    };
+
+    fetchInitialStates();
+  }, []);
 
   const toggleDevice = useCallback(async (device_id) => {
     let toggledState = false;
