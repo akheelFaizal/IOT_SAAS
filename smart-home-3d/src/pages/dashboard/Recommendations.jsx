@@ -28,64 +28,59 @@ const Recommendations = () => {
   }, [token]);
 
   useEffect(() => {
-    // Simulated Rule-Based AI Engine
+    // Merge ML AI Insights with base rules
     const generateRules = () => {
       let recs = [];
       const acDevice = devices.find(d => d.device_id.includes('ac'));
-      const activeLights = devices.filter(d => d.device_id.includes('light') && d.state);
       
-      // Rule 1: High consumption devices left on for long
-      if (acDevice && acDevice.state) {
-        if (acDevice.usage_time_hours > 3) {
+      // 1. Add ML Recommendations First
+      if (energySummary?.ai_insights?.recommendations) {
+         energySummary.ai_insights.recommendations.forEach((text, i) => {
+             recs.push({
+                 id: `ml_rec_${i}`,
+                 type: text.includes('High alert') ? 'forecast' : text.includes('Observation') ? 'optimization' : 'warning',
+                 title: text.includes('alert') ? 'AI Slab Risk Prediction' : 'AI Behavioral Insight',
+                 description: text,
+                 savings: 'AI Computed',
+                 icon: <RefreshCcw size={24} className="text-purple-400" />
+             });
+         });
+      }
+
+      // 2. Add SHAP Explainability if available
+      if (energySummary?.ai_insights?.explanations) {
+          // Sort to find the highest impacting feature
+          const topDriver = Object.entries(energySummary.ai_insights.explanations)
+              .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+              
+          if (topDriver && Math.abs(topDriver[1]) > 0.05) {
+              recs.push({
+                 id: 'ml_shap',
+                 type: 'info',
+                 title: 'AI Transparency Layer (SHAP)',
+                 description: `Our model indicates that '${topDriver[0]}' is having the largest impact on your current usage predictions.`,
+                 savings: 'Analytics',
+                 icon: <Info size={24} className="text-blue-400" />
+              });
+          }
+      }
+
+      // 3. Fallback to basic rule if AI is silent
+      if (recs.length === 0 && acDevice && acDevice.state && acDevice.usage_time_hours > 3) {
           recs.push({
             id: 'rec_ac_duration',
             type: 'warning',
             title: 'High Usage: AC',
-            description: `The ${acDevice.device_name} has been running for over ${Math.floor(acDevice.usage_time_hours)} hours. Consider using the fan instead or raising the thermostat slightly.`,
+            description: `The ${acDevice.device_name} has been running for over ${Math.floor(acDevice.usage_time_hours)} hours. Consider using the fan instead.`,
             savings: '₹12.50/day',
             icon: <ZapOff size={24} className="text-amber-500" />
           });
-        }
       }
-
-      // Rule 2: Multiple lights on
-      if (activeLights.length > 2) {
-        recs.push({
-          id: 'rec_lights',
-          type: 'optimization',
-          title: 'Lighting Inefficiency',
-          description: `You have ${activeLights.length} lights turned on right now. Consider using natural daylight if possible, or turning off lights in unoccupied rooms.`,
-          savings: '₹2.00/day',
-          icon: <Lightbulb size={24} className="text-yellow-400" />
-        });
-      }
-
-      // Rule 3: Bill Forecast Optimization
-      if (energySummary?.daily_units > 15) {
-         recs.push({
-            id: 'rec_bill',
-            type: 'forecast',
-            title: 'Bill Projection Alert',
-            description: `Your daily usage is trending above 15 kWh. At this rate, your projected monthly bill will jump to a higher tariff slab. Reduce base load by 10% to stay in the lower slab.`,
-            savings: '₹250.00/month',
-            icon: <TrendingDown size={24} className="text-indigo-400" />
-         });
-      }
-
-      // Rule 4: Generic Good practice
-      recs.push({
-          id: 'rec_generic',
-          type: 'info',
-          title: 'Smart Optimization',
-          description: 'Scheduling your heavy appliances (like washing machines) during off-peak hours (10 PM - 6 AM) reduces grid strain and may lower costs on time-of-use tariffs.',
-          savings: 'Variable',
-          icon: <RefreshCcw size={24} className="text-blue-400" />
-      });
 
       setRecommendations(recs);
     };
 
-    if (devices.length > 0) {
+    if (devices.length > 0 || energySummary?.ai_insights) {
       generateRules();
     }
   }, [devices, energySummary]);

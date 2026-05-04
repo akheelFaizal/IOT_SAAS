@@ -14,8 +14,20 @@ def train_pipeline():
         return
 
     print("Loading dataset...")
-    df = pd.read_csv(data_path)
+    # Handle '?' as NaN and set low_memory=False for better type inference
+    df = pd.read_csv(data_path, na_values='?', low_memory=False)
     
+    # List of numeric columns that might have '?' or mixed types
+    numeric_cols = [
+        'Global_active_power', 'Global_reactive_power', 'Voltage', 
+        'Global_intensity', 'Sub_metering_1', 'Sub_metering_2', 
+        'Sub_metering_3', 'Solar_Generation'
+    ]
+    
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
     # 1. Preprocessing
     # Ensure Timestamp is datetime
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], format='%d-%m-%Y %H:%M:%S')

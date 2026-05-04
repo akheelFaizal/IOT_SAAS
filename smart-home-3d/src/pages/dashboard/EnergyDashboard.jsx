@@ -4,6 +4,7 @@ import { Activity, Zap, CreditCard, TrendingUp, AlertTriangle, ArrowRight, Light
 import SmartHomeScene from '../../components/SmartHomeScene';
 import { useNavigate } from 'react-router-dom';
 import DeviceTrendsChart from '../../components/Dashboard/DeviceTrendsChart';
+import LiveLoadChart from '../../components/Dashboard/LiveLoadChart';
 import { useDevices } from '../../store/DeviceContext';
 
 const EnergyDashboard = () => {
@@ -12,6 +13,7 @@ const EnergyDashboard = () => {
   const { devices } = useDevices();
   const [energyData, setEnergyData] = useState(null);
   const [historicalData, setHistoricalData] = useState([]);
+  const [liveTelemetry, setLiveTelemetry] = useState([]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -29,6 +31,13 @@ const EnergyDashboard = () => {
         });
         if (historyRes.ok) {
           setHistoricalData(await historyRes.json());
+        }
+
+        const liveRes = await fetch('http://localhost:3000/api/live-telemetry', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (liveRes.ok) {
+          setLiveTelemetry(await liveRes.json());
         }
       } catch (err) {
         console.error("Error fetching energy dashboard data:", err);
@@ -59,7 +68,8 @@ const EnergyDashboard = () => {
       )}
 
       {/* Top Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      {/* Top Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
         <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-5 border border-slate-700 shadow-lg">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 opacity-80 text-emerald-400">
@@ -84,14 +94,29 @@ const EnergyDashboard = () => {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 opacity-80 text-blue-400">
               <Activity size={20} />
-              <h3 className="font-medium text-sm text-slate-300">Active Devices</h3>
+              <h3 className="font-medium text-sm text-slate-300">AI Predicted Usage (1h)</h3>
             </div>
-            <span className="flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-            </span>
           </div>
-          <p className="text-3xl font-bold">{activeCount} <span className="text-lg font-normal text-slate-500">/ {devices.length}</span></p>
+          <p className="text-3xl font-bold">{energyData?.ai_insights?.predicted_consumption_kwh ? energyData.ai_insights.predicted_consumption_kwh.toFixed(2) : 0} <span className="text-lg font-normal text-slate-500">kWh</span></p>
+        </div>
+
+        <div className={`bg-slate-800/80 backdrop-blur-md rounded-xl p-5 border shadow-lg transition-colors duration-500 ${energyData?.ai_insights?.slab_risk_probability > 0.7 ? 'border-red-500/50 shadow-red-500/20 bg-red-500/5' : 'border-slate-700'}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className={`flex items-center gap-2 opacity-80 ${energyData?.ai_insights?.slab_risk_probability > 0.7 ? 'text-red-400' : 'text-purple-400'}`}>
+              <AlertTriangle size={20} />
+              <h3 className="font-medium text-sm text-slate-300">AI Slab Risk</h3>
+            </div>
+            {energyData?.ai_insights?.slab_risk_probability > 0.7 && (
+               <span className="flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+               </span>
+            )}
+          </div>
+          <p className={`text-3xl font-bold ${energyData?.ai_insights?.slab_risk_probability > 0.7 ? 'text-red-400' : 'text-white'}`}>
+            {energyData?.ai_insights ? Math.round(energyData.ai_insights.slab_risk_probability * 100) : 0}% 
+            <span className="text-lg font-normal opacity-60"> Prob.</span>
+          </p>
         </div>
       </div>
 
@@ -150,12 +175,21 @@ const EnergyDashboard = () => {
         
         {/* Chart Card */}
         <div className="lg:col-span-3 bg-slate-800/80 backdrop-blur-md rounded-xl p-5 border border-slate-700 shadow-lg mt-2">
-           <div className="flex items-center gap-2 mb-4 border-b border-slate-700 pb-3">
-              <TrendingUp className="text-blue-400" size={20} />
-              <h3 className="font-bold text-white">Energy Usage Graph (Monthly)</h3>
+           <div className="flex items-center justify-between mb-4 border-b border-slate-700 pb-3">
+              <div className="flex items-center gap-2">
+                 <Activity className="text-indigo-400" size={20} />
+                 <h3 className="font-bold text-white">Live Household Load (Last 30 Min)</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                 <span className="flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-indigo-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                 </span>
+                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Live Stream</span>
+              </div>
            </div>
            <div className="h-[300px]">
-              <DeviceTrendsChart data={historicalData} hideCard={true} />
+              <LiveLoadChart data={liveTelemetry} />
            </div>
         </div>
       </div>

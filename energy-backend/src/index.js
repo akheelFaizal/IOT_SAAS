@@ -149,6 +149,26 @@ app.get('/api/devices', authenticateToken, (req, res) => {
 });
 
 // Get recent telemetry
+// --- LIVE TELEMETRY FOR REAL-TIME GRAPH ---
+app.get('/api/live-telemetry', authenticateToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                DATE_TRUNC('minute', timestamp) as time,
+                SUM(power_consumption) as total_power
+            FROM telemetry
+            WHERE timestamp >= NOW() - INTERVAL '30 minutes'
+            GROUP BY DATE_TRUNC('minute', timestamp)
+            ORDER BY time ASC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Database Error');
+    }
+});
+
 app.get('/api/telemetry', authenticateToken, async (req, res) => {
     const { device_id, limit = 100 } = req.query;
     try {
