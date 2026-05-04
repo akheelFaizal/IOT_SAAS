@@ -12,7 +12,7 @@ const LiveLoadChart = ({ data }) => {
 
   const formattedData = data.map(d => ({
     time: new Date(d.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    power: parseFloat(d.total_power)
+    power: parseFloat(parseFloat(d.total_power).toFixed(2))
   }));
 
   return (

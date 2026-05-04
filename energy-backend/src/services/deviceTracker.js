@@ -104,21 +104,27 @@ class DeviceTracker {
       occupancy = 0, 
       solar_generation = 0, 
       ev_charging = 0, 
-      anomaly = 0 
+      anomaly = 0,
+      global_reactive_power = 0.1,
+      sub1 = 0,
+      sub2 = 0,
+      sub3 = 0
     } = metrics;
 
     const query = `
       INSERT INTO telemetry (
         device_id, power_consumption, status, 
         voltage, global_intensity, occupancy, 
-        solar_generation, ev_charging, anomaly
+        solar_generation, ev_charging, anomaly,
+        global_reactive_power, sub1, sub2, sub3
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `;
     const values = [
       deviceId, powerConsumptionWatts, status,
       voltage, global_intensity, occupancy,
-      solar_generation, ev_charging, anomaly
+      solar_generation, ev_charging, anomaly,
+      global_reactive_power, sub1, sub2, sub3
     ];
 
     try {

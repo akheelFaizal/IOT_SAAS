@@ -11,7 +11,9 @@ const Analytics = () => {
   const [activeTab, setActiveTab] = useState('monthly');
   const [loading, setLoading] = useState(true);
   const [historicalData, setHistoricalData] = useState([]);
+  const [peakHoursData, setPeakHoursData] = useState([]);
   const [energySummary, setEnergySummary] = useState(null);
+  const targetBudget = 2500; // This could be moved to user settings later
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -27,6 +29,11 @@ const Analytics = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         setHistoricalData(await historyRes.json());
+
+        const peakRes = await fetch('http://localhost:3000/api/peak-analysis', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        setPeakHoursData(await peakRes.json());
       } catch (error) {
         console.error("Error fetching analytics data:", error);
       } finally {
@@ -36,14 +43,6 @@ const Analytics = () => {
     
     fetchAnalytics();
   }, [token]);
-
-  // Mock data for Peak Hours
-  const peakHoursData = [
-    { hour: '00:00', load: 20 }, { hour: '04:00', load: 15 },
-    { hour: '08:00', load: 45 }, { hour: '12:00', load: 30 },
-    { hour: '16:00', load: 60 }, { hour: '20:00', load: 85 },
-    { hour: '23:00', load: 35 }
-  ];
 
   if (loading) {
     return (
@@ -101,6 +100,7 @@ const Analytics = () => {
                       <RechartsTooltip 
                         contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
                         itemStyle={{ color: '#e2e8f0' }}
+                        formatter={(value) => [`${parseFloat(value).toFixed(2)} kWh`, 'Usage']}
                       />
                       <Bar dataKey="total_energy_kwh" fill="#6366f1" radius={[4, 4, 0, 0]} name="Energy (kWh)" />
                     </BarChart>
@@ -114,7 +114,7 @@ const Analytics = () => {
                 <h3 className="font-bold text-white mb-4 flex items-center gap-2">
                   <TrendingUp size={18} className="text-emerald-400" /> Device Timeline (Last 24h)
                 </h3>
-                <div className="h-[350px]">
+                <div className="h-auto">
                   <DeviceTrendsChart data={historicalData} />
                 </div>
               </div>
@@ -134,6 +134,7 @@ const Analytics = () => {
                       <RechartsTooltip 
                         contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
                         itemStyle={{ color: '#e2e8f0' }}
+                        formatter={(value) => [`${parseFloat(value).toFixed(2)}%`, 'Load']}
                       />
                       <Line type="monotone" dataKey="load" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b' }} name="Avg Load (%)" />
                     </LineChart>
@@ -151,17 +152,17 @@ const Analytics = () => {
               <div className="space-y-4">
                 <div className="flex justify-between items-center p-3 rounded-lg bg-slate-900/50 border border-slate-700">
                   <span className="text-slate-400 text-sm">Estimated Bill</span>
-                  <span className="text-xl font-bold text-white">₹{energySummary?.estimated_bill?.toFixed(2) || 0}</span>
+                  <span className="text-xl font-bold text-white">₹{(energySummary?.estimated_bill || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 rounded-lg bg-slate-900/50 border border-slate-700">
                   <span className="text-slate-400 text-sm">Target Budget</span>
-                  <span className="text-slate-200">₹2000.00</span>
+                  <span className="text-slate-200">₹{targetBudget.toFixed(2)}</span>
                 </div>
                 
                 <div className="w-full bg-slate-700 rounded-full h-2.5 mt-2">
-                  <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${Math.min(((energySummary?.estimated_bill || 0) / 2000) * 100, 100)}%` }}></div>
+                  <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${Math.min(((energySummary?.estimated_bill || 0) / targetBudget) * 100, 100)}%` }}></div>
                 </div>
-                <p className="text-xs text-right text-slate-400">{(((energySummary?.estimated_bill || 0) / 2000) * 100).toFixed(1)}% of budget</p>
+                <p className="text-xs text-right text-slate-400">{(((energySummary?.estimated_bill || 0) / targetBudget) * 100).toFixed(1)}% of budget</p>
               </div>
             </div>
 

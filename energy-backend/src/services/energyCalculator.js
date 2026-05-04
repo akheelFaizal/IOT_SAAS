@@ -122,12 +122,12 @@ class EnergyCalculator {
           const history = historyRes.rows.map(r => parseFloat(r.total_power) / 1000); // convert W to kW
 
           return {
-              Global_reactive_power: 0.1, 
+              Global_reactive_power: parseFloat(latest.global_reactive_power) || 0.1, 
               Voltage: parseFloat(latest.voltage) || 230.0,
               Global_intensity: parseFloat(latest.global_intensity) || 0.0,
-              Sub_metering_1: 0, 
-              Sub_metering_2: 0,
-              Sub_metering_3: 0,
+              Sub_metering_1: parseFloat(latest.sub1) || 0, 
+              Sub_metering_2: parseFloat(latest.sub2) || 0,
+              Sub_metering_3: parseFloat(latest.sub3) || 0,
               Occupancy: parseInt(latest.occupancy) || 0,
               Solar_Generation: (parseFloat(latest.solar_generation) || 0) / 1000,
               EV_Charging: parseInt(latest.ev_charging) || 0,

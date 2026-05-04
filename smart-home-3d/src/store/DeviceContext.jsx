@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { useAuth } from './AuthContext';
 
 const initialDevices = [
   // Living Room
@@ -19,45 +20,64 @@ const DeviceContext = createContext(null);
 export const DeviceProvider = ({ children }) => {
   const [devices, setDevices] = useState(initialDevices);
   const [initLoaded, setInitLoaded] = useState(false);
+  const { token } = useAuth();
 
+  // Poll for device updates (usage hours, real states, etc)
   React.useEffect(() => {
-    const fetchInitialStates = async () => {
+    const fetchStates = async () => {
       try {
-        const res = await fetch('http://localhost:3000/devices');
+        if (!token) return;
+        const res = await fetch('http://localhost:3000/api/devices', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (res.ok) {
           const cloudDevices = await res.json();
-          // Merge local initial config with backend states
           setDevices(prev => prev.map(localDev => {
             const remoteDev = cloudDevices.find(d => d.device_id === localDev.device_id);
-            return remoteDev ? { ...localDev, state: remoteDev.state === 'on' } : localDev;
+            if (!remoteDev) return localDev;
+            
+            return { 
+              ...localDev, 
+              state: remoteDev.state === true || remoteDev.state === 'on',
+              // Sync the dynamic metrics from backend
+              usage_time_hours: remoteDev.usage_time_hours,
+              energy_kwh: remoteDev.energy_kwh
+            };
           }));
-          setInitLoaded(true);
+          if (!initLoaded) setInitLoaded(true);
         }
       } catch (err) {
-        console.error("Failed to fetch initial device states", err);
+        console.error("Failed to sync device states", err);
       }
     };
 
-    fetchInitialStates();
-  }, []);
+    // Initial fetch
+    fetchStates();
+
+    // Polling interval (5 seconds)
+    const interval = setInterval(fetchStates, 5000);
+    return () => clearInterval(interval);
+  }, [initLoaded]);
 
   const toggleDevice = useCallback(async (device_id) => {
-    let toggledState = false;
+    // Find the current state synchronously to ensure the API payload is correct
+    const currentDevice = devices.find(d => d.device_id === device_id);
+    if (!currentDevice) return;
+    
+    const newState = !currentDevice.state;
 
     setDevices((prevDevices) =>
       prevDevices.map((device) => {
         if (device.device_id === device_id) {
-          toggledState = !device.state;
-          return { ...device, state: toggledState };
+          return { ...device, state: newState };
         }
         return device;
       })
     );
 
-    // Mock API Call
     const payload = {
       device: device_id,
-      state: toggledState ? 'on' : 'off',
+      state: newState ? 'on' : 'off',
       timestamp: Date.now(),
     };
 
@@ -66,13 +86,16 @@ export const DeviceProvider = ({ children }) => {
     try {
       await fetch('http://localhost:3000/device-event', { 
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload) 
       });
     } catch (error) {
       console.error('Failed to post device event', error);
     }
-  }, []);
+  }, [devices, token]);
 
   return (
     <DeviceContext.Provider value={{ devices, toggleDevice }}>

@@ -169,6 +169,32 @@ app.get('/api/live-telemetry', authenticateToken, async (req, res) => {
     }
 });
 
+// --- PEAK USAGE ANALYSIS ---
+app.get('/api/peak-analysis', authenticateToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                EXTRACT(HOUR FROM timestamp) || ':00' as hour,
+                AVG(power_consumption) as avg_load
+            FROM telemetry
+            WHERE timestamp >= NOW() - INTERVAL '7 days'
+            GROUP BY EXTRACT(HOUR FROM timestamp)
+            ORDER BY EXTRACT(HOUR FROM timestamp) ASC
+        `;
+        const result = await pool.query(query);
+        // Normalize for the percentage-based graph
+        const maxLoad = Math.max(...result.rows.map(r => parseFloat(r.avg_load))) || 1;
+        const normalized = result.rows.map(r => ({
+            hour: r.hour,
+            load: Math.round((parseFloat(r.avg_load) / maxLoad) * 100)
+        }));
+        res.json(normalized);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Database Error');
+    }
+});
+
 app.get('/api/telemetry', authenticateToken, async (req, res) => {
     const { device_id, limit = 100 } = req.query;
     try {

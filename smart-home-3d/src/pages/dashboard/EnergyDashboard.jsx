@@ -77,7 +77,7 @@ const EnergyDashboard = () => {
               <h3 className="font-medium text-sm text-slate-300">Units Consumed Today</h3>
             </div>
           </div>
-          <p className="text-3xl font-bold">{energyData?.daily_units || 0} <span className="text-lg font-normal text-slate-500">kWh</span></p>
+          <p className="text-3xl font-bold">{(energyData?.daily_units || 0).toFixed(2)} <span className="text-lg font-normal text-slate-500">kWh</span></p>
         </div>
 
         <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-5 border border-slate-700 shadow-lg">
@@ -87,7 +87,7 @@ const EnergyDashboard = () => {
               <h3 className="font-medium text-sm text-slate-300">Current Bill Estimate</h3>
             </div>
           </div>
-          <p className="text-3xl font-bold text-emerald-400">₹{energyData?.estimated_bill || 0}</p>
+          <p className="text-3xl font-bold text-emerald-400">₹{(energyData?.estimated_bill || 0).toFixed(2)}</p>
         </div>
 
         <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-5 border border-slate-700 shadow-lg">

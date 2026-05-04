@@ -51,6 +51,10 @@ const pool = new Pool({
             solar_generation DECIMAL DEFAULT 0,
             ev_charging INT DEFAULT 0,
             anomaly INT DEFAULT 0,
+            global_reactive_power DECIMAL DEFAULT 0.1,
+            sub1 DECIMAL DEFAULT 0,
+            sub2 DECIMAL DEFAULT 0,
+            sub3 DECIMAL DEFAULT 0,
             status TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -68,6 +72,10 @@ const pool = new Pool({
             ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS solar_generation DECIMAL DEFAULT 0;
             ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS ev_charging INT DEFAULT 0;
             ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS anomaly INT DEFAULT 0;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS global_reactive_power DECIMAL DEFAULT 0.1;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS sub1 DECIMAL DEFAULT 0;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS sub2 DECIMAL DEFAULT 0;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS sub3 DECIMAL DEFAULT 0;
         `;
         await client.query(addColumnsQuery);
         

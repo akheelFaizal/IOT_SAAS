@@ -59,6 +59,8 @@ const DeviceTrendsChart = ({ data, hideCard = false }) => {
           <Tooltip 
             contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', borderRadius: '8px', color: '#f8fafc' }}
             itemStyle={{ color: '#e2e8f0' }}
+            formatter={(value) => [`${parseFloat(value).toFixed(2)} kWh`, 'Consumption']}
+            wrapperStyle={{ zIndex: 1000 }}
           />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
           
@@ -84,7 +86,7 @@ const DeviceTrendsChart = ({ data, hideCard = false }) => {
   }
 
   return (
-    <div className="bg-slate-800/80 backdrop-blur-md rounded-xl p-6 border border-slate-700 shadow-2xl">
+    <div className=" rounded-xl p-6">
       <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
         <span className="w-1.5 h-6 bg-blue-500 rounded-full inline-block"></span>
         30-Day Device Consumption Trends

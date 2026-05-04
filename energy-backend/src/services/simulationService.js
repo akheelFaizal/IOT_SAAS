@@ -47,16 +47,12 @@ class SimulationService {
     };
 
     let totalActivePower = 0;
+    let totalReactivePower = 0;
+    let sub1 = 0; // Kitchen
+    let sub2 = 0; // Laundry/Utility
+    let sub3 = 0; // HVAC/Water Heater
 
     this.devices.forEach(deviceId => {
-      const device = deviceTracker.devices.get(deviceId);
-      
-      // 1. Simulate random state changes
-      if (deviceId !== 'fridge_kitchen' && Math.random() < 0.1) {
-        const newState = device ? !device.state : Math.random() < 0.5;
-        deviceTracker.updateDeviceState(deviceId, newState ? 'on' : 'off', timestamp);
-      }
-
       const currentSnapshot = deviceTracker.getDevicesSnapshot().find(d => d.device_id === deviceId);
       
       if (currentSnapshot) {
@@ -66,10 +62,26 @@ class SimulationService {
         
         totalActivePower += actualPower;
 
+        // Simulate Reactive Power (Inductive loads like AC/Fans have higher reactive components)
+        let pf = 0.95; // Power factor
+        if (deviceId.includes('ac') || deviceId.includes('fan')) pf = 0.85;
+        if (deviceId.includes('fridge')) pf = 0.9;
+        
+        const reactivePower = actualPower > 0 ? (actualPower * Math.sqrt(1/(pf*pf) - 1)) : 0;
+        totalReactivePower += reactivePower;
+
+        // Map to Sub-meters
+        if (deviceId.includes('kitchen')) sub1 += actualPower;
+        if (deviceId.includes('ac')) sub3 += actualPower;
+
         // 3. Log telemetry with global context
         deviceTracker.logTelemetry(deviceId, actualPower, currentSnapshot.state ? 'on' : 'off', {
           ...globalMetrics,
-          global_intensity: totalActivePower / globalMetrics.voltage
+          global_intensity: totalActivePower / globalMetrics.voltage,
+          global_reactive_power: totalReactivePower / 1000, // in kVAR
+          sub1: sub1 / 10, // Normalized for UCI dataset scale
+          sub2: sub2 / 10,
+          sub3: sub3 / 10
         });
       }
     });
