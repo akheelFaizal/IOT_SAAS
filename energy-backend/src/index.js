@@ -108,27 +108,20 @@ app.get('/energy-summary', authenticateToken, async (req, res) => {
     const estimatedBill = tariffCalculator.calculateEstimatedBill(totalUnits);
     const alerts = tariffCalculator.generateAlerts(totalUnits, activeDevices);
 
-    let mlPredictions = null;
+    let aiInsights = null;
     try {
-       const devicesSnapshot = deviceTracker.getDevicesSnapshot();
-       const mlDevices = devicesSnapshot.map(d => ({
-          device: d.device_id.includes('ac') ? 'AC' : d.device_id.includes('fridge') ? 'Refrigerator' : 'Lighting',
-          hours: d.usage_time_hours || 0,
-          power: d.power_rating_watts || 100,
-          room: 'living_room'
-       }));
-       
-       if (mlDevices.length > 0) {
-          const mlResponse = await axios.post('http://localhost:8001/predict-consumption', {
-             devices: mlDevices,
-             temperature: 28.0,
-             day_of_week: "weekday",
-             time_of_day: "evening"
-          });
-          mlPredictions = mlResponse.data;
+       const mlInput = await energyCalculator.getMLInput();
+       if (mlInput) {
+          const mlPrediction = await axios.post('http://localhost:8000/predict-consumption', mlInput);
+          const mlRecommendations = await axios.post('http://localhost:8000/optimize-usage', mlPrediction.data);
+          
+          aiInsights = {
+             ...mlPrediction.data,
+             recommendations: mlRecommendations.data.recommendations
+          };
        }
     } catch (error) {
-       console.error('ML Service Error');
+       console.error('ML Service Error:', error.message);
     }
 
     res.json({
@@ -137,7 +130,7 @@ app.get('/energy-summary', authenticateToken, async (req, res) => {
       estimated_bill: parseFloat(estimatedBill.toFixed(2)),
       active_devices: activeDevices,
       alerts: alerts,
-      ai_insights: mlPredictions
+      ai_insights: aiInsights
     });
   } catch (err) {
     res.status(500).send('Database Error');

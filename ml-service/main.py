@@ -1,135 +1,141 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List
-import joblib
 import pandas as pd
 import numpy as np
+import joblib
 import os
+from typing import List, Dict
 
-app = FastAPI(title="Smart Home ML Prediction Service")
+app = FastAPI(title="SmartSaaS ML Service")
 
-# Load models and encoders if available
-models_dir = 'models'
-try:
-    regressor = joblib.load(f'{models_dir}/energy_kwh_regressor.pkl')
-    classifier = joblib.load(f'{models_dir}/slab_risk_classifier.pkl')
-    encoders = joblib.load(f'{models_dir}/encoders.pkl')
-    models_loaded = True
-except Exception as e:
-    print(f"Warning: Models not loaded. Generating synthetic datasets and models first is required for accurate predictions. Error: {e}")
-    models_loaded = False
+# Global variables for models
+models = {}
 
-class DeviceInput(BaseModel):
-    device: str
-    hours: float
-    power: float
-    room: str = "living_room" # default
+@app.on_event("startup")
+def load_models():
+    model_paths = {
+        'reg_model': 'models/consumption_model.pkl',
+        'clf_model': 'models/slab_risk_model.pkl',
+        'scaler': 'models/scaler.pkl',
+        'features': 'models/feature_names.pkl',
+        'shap_explainer': 'models/shap_explainer.pkl'
+    }
+    
+    for key, path in model_paths.items():
+        if os.path.exists(path):
+            models[key] = joblib.load(path)
+            print(f"Loaded {key}")
+        else:
+            print(f"Warning: {path} not found.")
 
-class PredictionRequest(BaseModel):
-    devices: List[DeviceInput]
-    temperature: float = 28.0
-    day_of_week: str = "weekday"
-    time_of_day: str = "evening"
-
-@app.get("/")
-def read_root():
-    return {"status": "ok", "message": "ML Prediction Service is running", "models_loaded": models_loaded}
+class TelemetryData(BaseModel):
+    Global_reactive_power: float
+    Voltage: float
+    Global_intensity: float
+    Sub_metering_1: float
+    Sub_metering_2: float
+    Sub_metering_3: float
+    Occupancy: int
+    Solar_Generation: float
+    EV_Charging: int
+    Anomaly: int
+    Hour: int
+    history: List[float]  # Recent 60 mins of Global_active_power for lags
 
 @app.post("/predict-consumption")
-def predict_consumption(req: PredictionRequest):
-    if not models_loaded:
-        # Fallback dummy logic if models aren't ready
-        return {
-            "device_predictions": [],
-            "predicted_daily_units": 7.0,
-            "predicted_monthly_units": 210.0,
-            "slab_risk": "high",
-            "probability_of_crossing_200_units": 0.85,
-            "recommendations": ["Reduce AC by 2 hours", "Turn off devices when not in use"]
-        }
+async def predict_consumption(data: TelemetryData):
+    if 'reg_model' not in models or 'scaler' not in models:
+        raise HTTPException(status_code=503, detail="Models not loaded")
     
-    device_predictions = []
-    total_daily_units = 0
-    max_prob_crossing_per_device = 0
-    recommendations = []
+    # 1. Feature Engineering (Match training logic)
+    hour_sin = np.sin(2 * np.pi * data.Hour / 24)
+    hour_cos = np.cos(2 * np.pi * data.Hour / 24)
     
-    for dev in req.devices:
-        try:
-            # Map values
-            device_type_enc = encoders['device_type'].transform([dev.device])[0] if dev.device in encoders['device_type'].classes_ else -1
-            room_enc = encoders['room'].transform([dev.room])[0] if dev.room in encoders['room'].classes_ else -1
-            dow_enc = encoders['day_of_week'].transform([req.day_of_week])[0] if req.day_of_week in encoders['day_of_week'].classes_ else -1
-            tod_enc = encoders['time_of_day'].transform([req.time_of_day])[0] if req.time_of_day in encoders['time_of_day'].classes_ else -1
-            
-            # Simple fallback if categories don't match exactly
-            if device_type_enc == -1: device_type_enc = 0
-            if room_enc == -1: room_enc = 0
-            if dow_enc == -1: dow_enc = 0
-            if tod_enc == -1: tod_enc = 0
-
-            features = pd.DataFrame([{
-                'device_type': device_type_enc,
-                'power_rating': dev.power,
-                'hours_used': dev.hours,
-                'time_of_day': tod_enc,
-                'day_of_week': dow_enc,
-                'room': room_enc,
-                'temperature': req.temperature
-            }])
-            
-            pred_kwh = regressor.predict(features)[0] # Device-level daily kwh
-            prob_crossing = classifier.predict_proba(features)[0][1] # Probability of class 1 based on this device's profile
-            
-            # Device level output
-            device_predictions.append({
-                "device": dev.device,
-                "room": dev.room,
-                "energy_kwh": round(pred_kwh, 2)
-            })
-            
-            total_daily_units += pred_kwh
-            if prob_crossing > max_prob_crossing_per_device:
-                max_prob_crossing_per_device = prob_crossing
-                
-            # Generate recommendations based on rule engine over the predictions
-            if pred_kwh > 2.0: # Arbitrary high usage condition
-                recommendations.append(f"Reduce {dev.device} usage in the {dev.room} (currently predicting {pred_kwh:.2f} kWh/day) to lower costs.")
-            elif dev.device == 'AC' and req.temperature < 24:
-                recommendations.append(f"Increase AC temperature in the {dev.room} by 2 degrees for 10% saving.")
-                
-        except Exception as e:
-            print(f"Error processing device {dev.device}: {e}")
-            pass
-            
-    total_monthly_units = total_daily_units * 30
+    # Assuming history[-1] is the last active power value
+    last_power = data.history[-1] if data.history else 0
+    net_power = last_power - data.Solar_Generation
     
-    # Global recommendations
-    if max_prob_crossing_per_device > 0.7 or total_monthly_units > 200:
-        slab_risk = "high"
-        if not recommendations:
-            recommendations.append("High risk of crossing 200 unit slab. Consider optimizing overall usage.")
-    elif max_prob_crossing_per_device > 0.3 or total_monthly_units > 150:
-        slab_risk = "medium"
-    else:
-        slab_risk = "low"
-        if not recommendations:
-           recommendations.append("Usage is optimal. Keep it up!")
-           
+    # Lags from history
+    lag_1 = data.history[-1] if len(data.history) >= 1 else 0
+    lag_5 = data.history[-5] if len(data.history) >= 5 else lag_1
+    lag_60 = data.history[0] if len(data.history) >= 60 else lag_5
+    
+    # Rolling stats from history
+    rolling_mean = np.mean(data.history) if data.history else 0
+    rolling_std = np.std(data.history) if data.history else 0
+    
+    input_dict = {
+        'Global_reactive_power': data.Global_reactive_power,
+        'Voltage': data.Voltage,
+        'Global_intensity': data.Global_intensity,
+        'Sub_metering_1': data.Sub_metering_1,
+        'Sub_metering_2': data.Sub_metering_2,
+        'Sub_metering_3': data.Sub_metering_3,
+        'Occupancy': data.Occupancy,
+        'Solar_Generation': data.Solar_Generation,
+        'EV_Charging': data.EV_Charging,
+        'Anomaly': data.Anomaly,
+        'hour_sin': hour_sin,
+        'hour_cos': hour_cos,
+        'net_power': net_power,
+        'lag_1': lag_1,
+        'lag_5': lag_5,
+        'lag_60': lag_60,
+        'rolling_mean_60': rolling_mean,
+        'rolling_std_60': rolling_std
+    }
+    
+    input_df = pd.DataFrame([input_dict])
+    
+    # Ensure column order matches training
+    input_df = input_df[models['features']]
+    
+    # Scale
+    input_scaled = models['scaler'].transform(input_df)
+    
+    # 2. Inference
+    prediction = models['reg_model'].predict(input_scaled)[0]
+    slab_risk_prob = models['clf_model'].predict_proba(input_scaled)[0][1]
+    
+    # 3. Interpretability (SHAP)
+    explanations = {}
+    if 'shap_explainer' in models:
+        shap_values = models['shap_explainer'].shap_values(input_scaled)
+        # Handle LightGBM multi-output or single output SHAP format
+        vals = shap_values[0] if isinstance(shap_values, list) else shap_values
+        for i, feat in enumerate(models['features']):
+            explanations[feat] = float(vals[0][i])
+            
     return {
-        "device_predictions": device_predictions,
-        "predicted_daily_units": round(total_daily_units, 2),
-        "predicted_monthly_units": round(total_monthly_units, 2),
-        "slab_risk": slab_risk,
-        "probability_of_crossing_200_units": round(max_prob_crossing_per_device, 2),
-        "recommendations": list(set(recommendations)) # Deduplicate
+        "predicted_consumption_kwh": float(prediction),
+        "slab_risk_probability": float(slab_risk_prob),
+        "explanations": explanations
     }
 
 @app.post("/optimize-usage")
-def optimize_usage(req: PredictionRequest):
-    # Reuse predict_consumption logic to get recommendations
-    res = predict_consumption(req)
-    return {
-        "devices_analyzed": len(req.devices),
-        "risk_level": res.get("slab_risk"),
-        "suggestions": res.get("recommendations", [])
-    }
+async def optimize_usage(prediction_data: Dict):
+    # Logic to generate human readable recommendations
+    risk = prediction_data.get("slab_risk_probability", 0)
+    explanations = prediction_data.get("explanations", {})
+    
+    recommendations = []
+    
+    if risk > 0.7:
+        recommendations.append("High alert: You are likely to cross the 200-unit slab this month.")
+        
+        # Look at SHAP values to see what's causing it
+        if explanations.get('EV_Charging', 0) > 0.1:
+            recommendations.append("Tip: EV Charging is significantly driving your risk. Consider charging after 11 PM.")
+        if explanations.get('net_power', 0) > 0.2:
+            recommendations.append("Observation: Your current appliance draw is much higher than your solar generation.")
+        if explanations.get('Occupancy', 0) < 0 and explanations.get('rolling_mean_60', 0) > 1.0:
+            recommendations.append("Safety Check: High energy usage detected while the home appears unoccupied.")
+            
+    if not recommendations:
+        recommendations.append("Your energy usage is currently optimized for the lowest slab rate.")
+        
+    return {"recommendations": recommendations}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

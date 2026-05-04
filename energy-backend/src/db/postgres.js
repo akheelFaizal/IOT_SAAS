@@ -45,6 +45,12 @@ const pool = new Pool({
             device_id TEXT NOT NULL,
             timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             power_consumption DECIMAL NOT NULL,
+            voltage DECIMAL,
+            global_intensity DECIMAL,
+            occupancy INT DEFAULT 0,
+            solar_generation DECIMAL DEFAULT 0,
+            ev_charging INT DEFAULT 0,
+            anomaly INT DEFAULT 0,
             status TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -53,7 +59,19 @@ const pool = new Pool({
         await client.query(createTableQuery);
         await client.query(createUsersTableQuery);
         await client.query(createTelemetryTableQuery);
-        console.log('[Postgres] Database initialization complete.');
+
+        // --- Migration: Add missing columns if they don't exist ---
+        const addColumnsQuery = `
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS voltage DECIMAL;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS global_intensity DECIMAL;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS occupancy INT DEFAULT 0;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS solar_generation DECIMAL DEFAULT 0;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS ev_charging INT DEFAULT 0;
+            ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS anomaly INT DEFAULT 0;
+        `;
+        await client.query(addColumnsQuery);
+        
+        console.log('[Postgres] Database initialization and migration complete.');
     } catch (err) {
         console.error('[Postgres] Initialization Error:', err);
     } finally {

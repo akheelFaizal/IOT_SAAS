@@ -97,12 +97,29 @@ class DeviceTracker {
     }
   }
 
-  async logTelemetry(deviceId, powerConsumptionWatts, status) {
+  async logTelemetry(deviceId, powerConsumptionWatts, status, metrics = {}) {
+    const { 
+      voltage = 230, 
+      global_intensity = 0, 
+      occupancy = 0, 
+      solar_generation = 0, 
+      ev_charging = 0, 
+      anomaly = 0 
+    } = metrics;
+
     const query = `
-      INSERT INTO telemetry (device_id, power_consumption, status)
-      VALUES ($1, $2, $3)
+      INSERT INTO telemetry (
+        device_id, power_consumption, status, 
+        voltage, global_intensity, occupancy, 
+        solar_generation, ev_charging, anomaly
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `;
-    const values = [deviceId, powerConsumptionWatts, status];
+    const values = [
+      deviceId, powerConsumptionWatts, status,
+      voltage, global_intensity, occupancy,
+      solar_generation, ev_charging, anomaly
+    ];
 
     try {
       await db.query(query, values);

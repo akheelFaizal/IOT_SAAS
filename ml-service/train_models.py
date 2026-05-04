@@ -1,56 +1,109 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
+import lightgbm as lgb
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error, accuracy_score
 import joblib
 import os
+import shap
 
-def train_models():
-    if not os.path.exists('data/smart_home_energy.csv'):
-        print("Dataset not found. Please run generate_dataset.py first.")
+def train_pipeline():
+    data_path = 'data/household_power_consumption.csv'
+    if not os.path.exists(data_path):
+        print(f"Dataset not found at {data_path}")
         return
-        
-    df = pd.read_csv('data/smart_home_energy.csv')
+
+    print("Loading dataset...")
+    df = pd.read_csv(data_path)
     
-    # Feature Engineering / Preprocessing
-    # Encode categorical variables
-    encoders = {}
-    categorical_cols = ['device_type', 'time_of_day', 'day_of_week', 'room']
+    # 1. Preprocessing
+    # Ensure Timestamp is datetime
+    df['Timestamp'] = pd.to_datetime(df['Timestamp'], format='%d-%m-%Y %H:%M:%S')
+    df = df.sort_values('Timestamp')
     
-    for col in categorical_cols:
-        le = LabelEncoder()
-        df[col] = le.fit_transform(df[col])
-        encoders[col] = le
-        
-    features = ['device_type', 'power_rating', 'hours_used', 'time_of_day', 'day_of_week', 'room', 'temperature']
+    # Handle missing values
+    df = df.ffill()
+    
+    # 2. Feature Engineering
+    print("Performing feature engineering...")
+    
+    # Cyclical Encoding for Time
+    df['hour_sin'] = np.sin(2 * np.pi * df['Hour'] / 24)
+    df['hour_cos'] = np.cos(2 * np.pi * df['Hour'] / 24)
+    
+    # Derived Feature: Net Power
+    df['net_power'] = df['Global_active_power'] - df['Solar_Generation']
+    
+    # Lag Features (1min, 5min, 60min)
+    df['lag_1'] = df['Global_active_power'].shift(1)
+    df['lag_5'] = df['Global_active_power'].shift(5)
+    df['lag_60'] = df['Global_active_power'].shift(60)
+    
+    # Rolling Statistics (1 hour window)
+    df['rolling_mean_60'] = df['Global_active_power'].rolling(window=60).mean()
+    df['rolling_std_60'] = df['Global_active_power'].rolling(window=60).std()
+    
+    # Target for Classification: Slab Risk
+    # Let's define Slab Risk as: If current power * 720 hours > 200 kWh
+    # (Simplified proxy for monthly projection)
+    df['slab_risk'] = (df['Global_active_power'] * 720 > 200).astype(int)
+    
+    # Drop rows with NaN from lags/rolling
+    df = df.dropna()
+    
+    # Features selection
+    features = [
+        'Global_reactive_power', 'Voltage', 'Global_intensity', 
+        'Sub_metering_1', 'Sub_metering_2', 'Sub_metering_3',
+        'Occupancy', 'Solar_Generation', 'EV_Charging', 'Anomaly',
+        'hour_sin', 'hour_cos', 'net_power', 
+        'lag_1', 'lag_5', 'lag_60', 'rolling_mean_60', 'rolling_std_60'
+    ]
+    
     X = df[features]
+    y_reg = df['Global_active_power']
+    y_clf = df['slab_risk']
     
-    y_reg = df['energy_kwh']
-    y_class = df['probability_of_crossing_200_units']
+    # 3. Time-Series Split (Chronological)
+    split_idx = int(len(df) * 0.8)
+    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+    y_reg_train, y_reg_test = y_reg.iloc[:split_idx], y_reg.iloc[split_idx:]
+    y_clf_train, y_clf_test = y_clf.iloc[:split_idx], y_clf.iloc[split_idx:]
     
-    X_train, X_test, y_reg_train, y_reg_test, y_class_train, y_class_test = train_test_split(
-        X, y_reg, y_class, test_size=0.2, random_state=42
-    )
+    # Scaling
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
     
-    print("Training Regression Model (Random Forest)...")
-    reg_model = RandomForestRegressor(n_estimators=100, random_state=42)
-    reg_model.fit(X_train, y_reg_train)
-    reg_score = reg_model.score(X_test, y_reg_test)
-    print(f"Regression R^2 Score: {reg_score:.4f}")
+    # 4. Training Models
+    print("Training Regression Model (LightGBM)...")
+    reg_model = lgb.LGBMRegressor(n_estimators=500, learning_rate=0.05, random_state=42, verbose=-1)
+    reg_model.fit(X_train_scaled, y_reg_train)
     
-    print("Training Classification Model (Random Forest)...")
-    clf_model = RandomForestClassifier(n_estimators=100, random_state=42)
-    clf_model.fit(X_train, y_class_train)
-    clf_score = clf_model.score(X_test, y_class_test)
-    print(f"Classification Accuracy: {clf_score:.4f}")
+    reg_pred = reg_model.predict(X_test_scaled)
+    print(f"Regression MAE: {mean_absolute_error(y_reg_test, reg_pred):.4f}")
     
-    # Save models and encoders
+    print("Training Classification Model (LightGBM)...")
+    clf_model = lgb.LGBMClassifier(n_estimators=500, learning_rate=0.05, random_state=42, verbose=-1)
+    clf_model.fit(X_train_scaled, y_clf_train)
+    
+    clf_pred = clf_model.predict(X_test_scaled)
+    print(f"Classification Accuracy: {accuracy_score(y_clf_test, clf_pred):.4f}")
+    
+    # 5. Serialization
+    print("Saving models and metadata...")
     os.makedirs('models', exist_ok=True)
-    joblib.dump(reg_model, 'models/energy_kwh_regressor.pkl')
-    joblib.dump(clf_model, 'models/slab_risk_classifier.pkl')
-    joblib.dump(encoders, 'models/encoders.pkl')
-    print("Models saved successfully to models/")
+    joblib.dump(reg_model, 'models/consumption_model.pkl')
+    joblib.dump(clf_model, 'models/slab_risk_model.pkl')
+    joblib.dump(scaler, 'models/scaler.pkl')
+    joblib.dump(features, 'models/feature_names.pkl')
+    
+    # SHAP Explainer for interpretability
+    print("Generating SHAP explainer...")
+    explainer = shap.TreeExplainer(reg_model)
+    joblib.dump(explainer, 'models/shap_explainer.pkl')
+    
+    print("Pipeline completed successfully!")
 
 if __name__ == '__main__':
-    train_models()
+    train_pipeline()

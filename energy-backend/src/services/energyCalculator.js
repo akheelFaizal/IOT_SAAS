@@ -93,6 +93,53 @@ class EnergyCalculator {
           return [];
       }
   }
+  /**
+   * Aggregates latest telemetry into the format expected by the ML Service
+   */
+  async getMLInput() {
+      try {
+          // 1. Get latest global metrics (from the most recent telemetry entry)
+          const latestQuery = `
+            SELECT * FROM telemetry 
+            ORDER BY timestamp DESC LIMIT 1
+          `;
+          const latestRes = await db.query(latestQuery);
+          if (latestRes.rows.length === 0) return null;
+          
+          const latest = latestRes.rows[0];
+
+          // 2. Get history (last 60 minute-level aggregates)
+          const historyQuery = `
+            SELECT 
+                DATE_TRUNC('minute', timestamp) as min,
+                SUM(power_consumption) as total_power
+            FROM telemetry
+            WHERE timestamp >= NOW() - INTERVAL '60 minutes'
+            GROUP BY DATE_TRUNC('minute', timestamp)
+            ORDER BY min ASC
+          `;
+          const historyRes = await db.query(historyQuery);
+          const history = historyRes.rows.map(r => parseFloat(r.total_power) / 1000); // convert W to kW
+
+          return {
+              Global_reactive_power: 0.1, 
+              Voltage: parseFloat(latest.voltage) || 230.0,
+              Global_intensity: parseFloat(latest.global_intensity) || 0.0,
+              Sub_metering_1: 0, 
+              Sub_metering_2: 0,
+              Sub_metering_3: 0,
+              Occupancy: parseInt(latest.occupancy) || 0,
+              Solar_Generation: (parseFloat(latest.solar_generation) || 0) / 1000,
+              EV_Charging: parseInt(latest.ev_charging) || 0,
+              Anomaly: parseInt(latest.anomaly) || 0,
+              Hour: new Date().getHours(),
+              history: history.length > 0 ? history : [0]
+          };
+      } catch (err) {
+          console.error('[ML Data Prep Error]', err);
+          return null;
+      }
+  }
 }
 
 module.exports = new EnergyCalculator();
