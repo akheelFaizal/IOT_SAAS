@@ -4,7 +4,7 @@ import { useDevices } from '../../store/DeviceContext';
 import { useAuth } from '../../store/AuthContext';
 
 const Recommendations = () => {
-  const { devices } = useDevices();
+  const { devices, toggleDevice } = useDevices();
   const { token } = useAuth();
   const [recommendations, setRecommendations] = useState([]);
   const [energySummary, setEnergySummary] = useState(null);
@@ -26,6 +26,44 @@ const Recommendations = () => {
     };
     fetchSummary();
   }, [token]);
+
+  const handleApplyTip = (rec) => {
+    const text = rec.description.toLowerCase();
+    
+    if (text.includes('ac') || text.includes('hvac')) {
+      const ac = devices.find(d => d.device_id.includes('ac'));
+      if (ac && ac.state) {
+        toggleDevice(ac.device_id);
+        alert('Automation Triggered: AC has been turned off to save energy.');
+      } else {
+        alert('AC is already off.');
+      }
+    } else if (text.includes('unoccupied')) {
+      let turnedOffCount = 0;
+      devices.forEach(d => {
+         if (d.state && !d.device_id.includes('fridge')) {
+            toggleDevice(d.device_id);
+            turnedOffCount++;
+         }
+      });
+      alert(`Automation Triggered: Turned off ${turnedOffCount} devices as the home appears unoccupied.`);
+    } else if (text.includes('kitchen')) {
+      let turnedOffCount = 0;
+      devices.forEach(d => {
+         if (d.state && d.device_id.includes('kitchen') && !d.device_id.includes('fridge')) {
+            toggleDevice(d.device_id);
+            turnedOffCount++;
+         }
+      });
+      if (turnedOffCount > 0) {
+        alert(`Automation Triggered: Turned off ${turnedOffCount} kitchen devices.`);
+      } else {
+        alert('All non-essential kitchen devices are already off.');
+      }
+    } else {
+      alert('Tip acknowledged! No direct automation available for this specific recommendation. Please adjust manually.');
+    }
+  };
 
   useEffect(() => {
     // Merge ML AI Insights with base rules
@@ -85,30 +123,7 @@ const Recommendations = () => {
     }
   }, [devices, energySummary]);
 
-  const handleApplyTip = (rec) => {
-    const text = rec.description.toLowerCase();
-    
-    if (text.includes('ac') || text.includes('hvac')) {
-      const ac = devices.find(d => d.device_id.includes('ac'));
-      if (ac && ac.state) {
-        toggleDevice(ac.device_id);
-        alert('Automation Triggered: AC has been turned off to save energy.');
-      } else {
-        alert('AC is already off.');
-      }
-    } else if (text.includes('unoccupied')) {
-      let turnedOffCount = 0;
-      devices.forEach(d => {
-         if (d.state && !d.device_id.includes('fridge')) {
-            toggleDevice(d.device_id);
-            turnedOffCount++;
-         }
-      });
-      alert(`Automation Triggered: Turned off ${turnedOffCount} devices as the home appears unoccupied.`);
-    } else {
-      alert('Tip acknowledged! No direct automation available for this specific recommendation. Please adjust manually.');
-    }
-  };
+
 
   return (
     <div className="w-full h-full text-slate-100 overflow-y-auto p-4 md:p-8 font-sans">

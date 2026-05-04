@@ -5,6 +5,19 @@ class DeviceTracker {
   constructor() {
     // Map of device_id -> { device_name, power_rating_watts, state, last_turned_on_time, total_uptime_ms }
     this.devices = new Map();
+    
+    // Register initial devices
+    this.registerDevice('light_living_room', 'Living Room Light', 60);
+    this.registerDevice('tv_living_room', 'Living Room TV', 150);
+    this.registerDevice('fan_living_room', 'Living Room Fan', 75);
+    this.registerDevice('light_bedroom', 'Bedroom Light', 40);
+    this.registerDevice('ac_bedroom', 'Bedroom AC', 1500);
+    this.registerDevice('fan_bedroom', 'Bedroom Fan', 75);
+    this.registerDevice('light_kitchen', 'Kitchen Light', 40);
+    this.registerDevice('fridge_kitchen', 'Refrigerator', 200);
+    this.registerDevice('washer_laundry', 'Washing Machine', 1200);
+    this.registerDevice('ev_charger_garage', 'EV Charger', 7200);
+    this.registerDevice('solar_inverter_roof', 'Solar Inverter', 50);
   }
 
   /**

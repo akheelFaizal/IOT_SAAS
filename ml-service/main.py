@@ -122,15 +122,25 @@ async def optimize_usage(prediction_data: Dict):
     
     if risk > 0.7:
         recommendations.append("High alert: You are likely to cross the 200-unit slab this month.")
+    elif risk > 0.4:
+        recommendations.append("Watch out: Your usage trend is pushing toward the next billing slab.")
         
-        # Look at SHAP values to see what's causing it
-        if explanations.get('EV_Charging', 0) > 0.1:
-            recommendations.append("Tip: EV Charging is significantly driving your risk. Consider charging after 11 PM.")
-        if explanations.get('net_power', 0) > 0.2:
-            recommendations.append("Observation: Your current appliance draw is much higher than your solar generation.")
-        if explanations.get('Occupancy', 0) < 0 and explanations.get('rolling_mean_60', 0) > 1.0:
-            recommendations.append("Safety Check: High energy usage detected while the home appears unoccupied.")
-            
+    # Always evaluate SHAP values for proactive tips
+    if explanations.get('EV_Charging', 0) > 0.05:
+        recommendations.append("Tip: EV Charging is currently a major power draw. Consider shifting this to off-peak hours (after 11 PM).")
+        
+    if explanations.get('net_power', 0) > 0.1:
+        recommendations.append("Observation: Your grid power draw is significantly higher than your solar generation.")
+        
+    if explanations.get('Occupancy', 0) < -0.05 and explanations.get('rolling_mean_60', 0) > 0.5:
+        recommendations.append("Safety Check: High energy usage detected while the home appears unoccupied.")
+        
+    if explanations.get('Sub_metering_3', 0) > 0.05:
+        recommendations.append("AC Warning: Your HVAC/AC system is consuming significant power. Consider raising the temperature by 1 degree.")
+        
+    if explanations.get('Sub_metering_1', 0) > 0.05:
+        recommendations.append("Kitchen Alert: Heavy load detected on kitchen circuits.")
+
     if not recommendations:
         recommendations.append("Your energy usage is currently optimized for the lowest slab rate.")
         

@@ -5,6 +5,9 @@ import Fan from './devices/Fan';
 import TV from './devices/TV';
 import AC from './devices/AC';
 import Refrigerator from './devices/Refrigerator';
+import Washer from './devices/Washer';
+import EVCharger from './devices/EVCharger';
+import SolarInverter from './devices/SolarInverter';
 
 const Wall = ({ position, args, color = "#e2e8f0" }) => (
   <Box position={position} args={args} receiveShadow castShadow>
@@ -30,22 +33,11 @@ const House = () => {
       <Wall position={[-5, 1.5, 0]} args={[0.2, 3, 10]} color="#94a3b8" />   {/* Left */}
       <Wall position={[5, 1.5, 0]} args={[0.2, 3, 10]} color="#94a3b8" />    {/* Right */}
 
-      {/* Interior Walls (dividing 10x10 into four 5x5 rooms) */}
-      {/* Center divider X-axis (with doorway gaps) */}
+      {/* Interior Walls */}
       <Wall position={[-2.5, 1.5, 0]} args={[4, 3, 0.2]} /> {/* Left divider */}
       <Wall position={[3.5, 1.5, 0]} args={[3, 3, 0.2]} />  {/* Right divider */}
-
-      {/* Center divider Z-axis */}
       <Wall position={[0, 1.5, -3]} args={[0.2, 3, 4]} /> {/* Back divider */}
       <Wall position={[0, 1.5, 3]} args={[0.2, 3, 4]} />  {/* Front divider */}
-      
-      {/* 
-        Rooms definition:
-        Living Room:  Bottom Left  [-2.5, 0, 2.5]
-        Kitchen:      Bottom Right [2.5, 0, 2.5]
-        Bedroom:      Top Left     [-2.5, 0, -2.5]
-        Bathroom:     Top Right    [2.5, 0, -2.5]
-      */}
 
       {/* Living Room */}
       <Light deviceId="light_living_room" position={[-2.5, 0, 2.5]} />
@@ -60,7 +52,16 @@ const House = () => {
       {/* Kitchen */}
       <Light deviceId="light_kitchen" position={[2.5, 0, 2.5]} />
       <Refrigerator deviceId="fridge_kitchen" position={[4.0, 0, 4.3]} rotation={[0, -Math.PI / 2, 0]} />
-      
+
+      {/* Laundry / Bathroom Area */}
+      <Washer deviceId="washer_laundry" position={[3.5, 0, -4.0]} rotation={[0, -Math.PI / 4, 0]} />
+
+      {/* Garage / Exterior */}
+      <EVCharger deviceId="ev_charger_garage" position={[4.9, 0, 0.9]} rotation={[0, -Math.PI / 2, 0]} />
+
+      {/* Roof / Solar */}
+      <SolarInverter deviceId="solar_inverter_roof" position={[0, 1.8, -5]} />
+
     </group>
   );
 };

@@ -12,7 +12,11 @@ const initialDevices = [
   { device_id: 'fan_bedroom', device_name: 'Bedroom Fan', power_rating_watts: 75, state: false, room: 'bedroom' },
   // Kitchen
   { device_id: 'light_kitchen', device_name: 'Kitchen Light', power_rating_watts: 40, state: false, room: 'kitchen' },
-  { device_id: 'fridge_kitchen', device_name: 'Refrigerator', power_rating_watts: 200, state: true, room: 'kitchen' }, // default true typically, but can be false for demo
+  { device_id: 'fridge_kitchen', device_name: 'Refrigerator', power_rating_watts: 200, state: true, room: 'kitchen' },
+  // New Devices
+  { device_id: 'washer_laundry', device_name: 'Washing Machine', power_rating_watts: 1200, state: false, room: 'laundry' },
+  { device_id: 'ev_charger_garage', device_name: 'EV Charger', power_rating_watts: 7200, state: false, room: 'garage' },
+  { device_id: 'solar_inverter_roof', device_name: 'Solar Inverter', power_rating_watts: 50, state: true, room: 'roof' }
 ];
 
 const DeviceContext = createContext(null);
