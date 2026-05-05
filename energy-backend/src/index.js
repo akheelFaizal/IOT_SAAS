@@ -112,8 +112,9 @@ app.get('/energy-summary', authenticateToken, async (req, res) => {
     try {
        const mlInput = await energyCalculator.getMLInput();
        if (mlInput) {
-          const mlPrediction = await axios.post('http://localhost:8000/predict-consumption', mlInput);
-          const mlRecommendations = await axios.post('http://localhost:8000/optimize-usage', mlPrediction.data);
+          const mlBaseUrl = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+          const mlPrediction = await axios.post(`${mlBaseUrl}/predict-consumption`, mlInput);
+          const mlRecommendations = await axios.post(`${mlBaseUrl}/optimize-usage`, mlPrediction.data);
           
           aiInsights = {
              ...mlPrediction.data,
@@ -157,7 +158,7 @@ app.get('/api/live-telemetry', authenticateToken, async (req, res) => {
                 DATE_TRUNC('minute', timestamp) as time,
                 SUM(power_consumption) as total_power
             FROM telemetry
-            WHERE timestamp >= NOW() - INTERVAL '30 minutes'
+            WHERE timestamp >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '30 minutes'
             GROUP BY DATE_TRUNC('minute', timestamp)
             ORDER BY time ASC
         `;
@@ -177,7 +178,7 @@ app.get('/api/peak-analysis', authenticateToken, async (req, res) => {
                 EXTRACT(HOUR FROM timestamp) || ':00' as hour,
                 AVG(power_consumption) as avg_load
             FROM telemetry
-            WHERE timestamp >= NOW() - INTERVAL '7 days'
+            WHERE timestamp >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '7 days'
             GROUP BY EXTRACT(HOUR FROM timestamp)
             ORDER BY EXTRACT(HOUR FROM timestamp) ASC
         `;

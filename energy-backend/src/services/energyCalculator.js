@@ -114,7 +114,7 @@ class EnergyCalculator {
                 DATE_TRUNC('minute', timestamp) as min,
                 SUM(power_consumption) as total_power
             FROM telemetry
-            WHERE timestamp >= NOW() - INTERVAL '60 minutes'
+            WHERE timestamp >= (NOW() AT TIME ZONE 'UTC') - INTERVAL '60 minutes'
             GROUP BY DATE_TRUNC('minute', timestamp)
             ORDER BY min ASC
           `;
