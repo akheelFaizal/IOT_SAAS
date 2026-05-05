@@ -12,11 +12,14 @@ const DeviceTrendsChart = ({ data, hideCard = false }) => {
 
   // Group data by date
   const groupedData = data.reduce((acc, curr) => {
-    const existing = acc.find(item => item.date === curr.date);
+    // Normalize date to a string (YYYY-MM-DD) for reliable grouping
+    const dateKey = typeof curr.date === 'string' ? curr.date.split('T')[0] : new Date(curr.date).toISOString().split('T')[0];
+    
+    const existing = acc.find(item => item.dateKey === dateKey);
     if (existing) {
        existing[curr.device_id] = curr.total_energy_kwh;
     } else {
-       const newEntry = { date: curr.date, [curr.device_id]: curr.total_energy_kwh };
+       const newEntry = { dateKey, date: curr.date, [curr.device_id]: curr.total_energy_kwh };
        acc.push(newEntry);
     }
     return acc;

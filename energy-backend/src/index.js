@@ -125,10 +125,14 @@ app.get('/energy-summary', authenticateToken, async (req, res) => {
        console.error('ML Service Error:', error.message);
     }
 
+    const budgetRes = await pool.query("SELECT value FROM settings WHERE key = 'target_budget'");
+    const targetBudget = budgetRes.rows.length > 0 ? parseFloat(budgetRes.rows[0].value) : 2500;
+
     res.json({
       daily_units: parseFloat(consumptionStats.daily_units.toFixed(2)),
       monthly_units: parseFloat(consumptionStats.monthly_units.toFixed(2)),
       estimated_bill: parseFloat(estimatedBill.toFixed(2)),
+      target_budget: targetBudget,
       active_devices: activeDevices,
       alerts: alerts,
       ai_insights: aiInsights
@@ -215,6 +219,37 @@ app.get('/api/telemetry', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Error fetching telemetry' });
+    }
+});
+
+app.get('/api/settings', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT key, value FROM settings');
+        const settings = {};
+        result.rows.forEach(row => {
+            settings[row.key] = row.value;
+        });
+        res.json(settings);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error fetching settings' });
+    }
+});
+
+app.post('/api/settings', authenticateToken, async (req, res) => {
+    const { key, value } = req.body;
+    if (!key || value === undefined) {
+        return res.status(400).json({ message: 'Key and value are required' });
+    }
+    try {
+        await pool.query(
+            'INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP',
+            [key, value.toString()]
+        );
+        res.json({ success: true, message: `Setting ${key} updated` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Error updating setting' });
     }
 });
 

@@ -60,9 +60,19 @@ const pool = new Pool({
         );
         `;
         
+        const createSettingsTableQuery = `
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO settings (key, value) VALUES ('target_budget', '2500') ON CONFLICT (key) DO NOTHING;
+        `;
+        
         await client.query(createTableQuery);
         await client.query(createUsersTableQuery);
         await client.query(createTelemetryTableQuery);
+        await client.query(createSettingsTableQuery);
 
         // --- Migration: Add missing columns if they don't exist ---
         const addColumnsQuery = `

@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../store/AuthContext';
 import { Settings as SettingsIcon, User, Bell, Shield, LifeBuoy, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Settings = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const navigate = useNavigate();
   
   const [toggles, setToggles] = useState({
@@ -14,8 +14,52 @@ const Settings = () => {
     weeklyReport: true
   });
 
+  const [settings, setSettings] = useState({});
+  const [updating, setUpdating] = useState(null);
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('http://localhost:3000/api/settings', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setSettings(await res.json());
+        }
+      } catch (err) {
+        console.error("Error fetching settings:", err);
+      }
+    };
+    fetchSettings();
+  }, [token]);
+
   const handleToggle = (key) => {
     setToggles(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleUpdateSetting = async (key, value) => {
+    setUpdating(key);
+    setMessage(null);
+    try {
+      const res = await fetch('http://localhost:3000/api/settings', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ key, value })
+      });
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Setting updated successfully!' });
+      } else {
+        setMessage({ type: 'error', text: 'Failed to update setting.' });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Error connecting to server.' });
+    } finally {
+      setUpdating(null);
+    }
   };
 
   const handleLogout = () => {
@@ -126,6 +170,42 @@ const Settings = () => {
                         <div className="w-11 h-6 bg-slate-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                      </label>
                   </div>
+               </div>
+            </div>
+
+            {/* Platform Settings Section */}
+            <div className="bg-slate-800/80 backdrop-blur-md rounded-xl border border-slate-700 shadow-lg overflow-hidden">
+               <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center gap-2">
+                  <SettingsIcon className="text-indigo-400" size={20} />
+                  <h2 className="font-bold text-white">Platform Configuration</h2>
+               </div>
+               <div className="p-6 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                     <div className="flex-1">
+                        <h4 className="text-sm font-bold text-white">Target Monthly Budget (₹)</h4>
+                        <p className="text-xs text-slate-400">Set your preferred monthly spending limit for energy.</p>
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <input 
+                           type="number" 
+                           value={settings.target_budget || ''} 
+                           onChange={(e) => setSettings(prev => ({ ...prev, target_budget: e.target.value }))}
+                           className="w-24 bg-slate-900 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-indigo-500"
+                        />
+                        <button 
+                           onClick={() => handleUpdateSetting('target_budget', settings.target_budget)}
+                           disabled={updating === 'target_budget'}
+                           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 text-white text-xs font-bold rounded transition-colors"
+                        >
+                           {updating === 'target_budget' ? 'Saving...' : 'Save'}
+                        </button>
+                     </div>
+                  </div>
+                  {message && (
+                     <p className={`text-xs mt-2 ${message.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {message.text}
+                     </p>
+                  )}
                </div>
             </div>
 
