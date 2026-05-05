@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: iot_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: energy_user
+      POSTGRES_PASSWORD: energy_pass
+      POSTGRES_DB: smart_home_energy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  ml-service:
+    build: ./ml-service
+    container_name: iot_ml_service
+    restart: always
+    ports:
+      - "8000:8000"
+
+  energy-backend:
+    build: ./energy-backend
+    container_name: iot_backend
+    restart: always
+    depends_on:
+      - postgres
+      - ml-service
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=energy_user
+      - POSTGRES_PASSWORD=energy_pass
+      - POSTGRES_DB=smart_home_energy
+      - JWT_SECRET=smarthome_secure_secret_2026_saas
+      - ML_SERVICE_URL=http://ml-service:8000
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build: ./smart-home-3d
+    container_name: iot_frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - energy-backend
+
+volumes:
+  postgres_data:
