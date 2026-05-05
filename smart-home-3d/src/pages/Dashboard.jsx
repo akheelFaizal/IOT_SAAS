@@ -13,7 +13,7 @@ const Analytics = () => {
   const [historicalData, setHistoricalData] = useState([]);
   const [peakHoursData, setPeakHoursData] = useState([]);
   const [energySummary, setEnergySummary] = useState(null);
-  const targetBudget = 2500; // This could be moved to user settings later
+  const targetBudget = energySummary?.target_budget || 2500;
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -93,9 +93,19 @@ const Analytics = () => {
                 </h3>
                 <div className="h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={historicalData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart 
+                      data={Object.values(historicalData.reduce((acc, curr) => {
+                        const dateStr = typeof curr.date === 'string' ? curr.date.split('T')[0] : new Date(curr.date).toISOString().split('T')[0];
+                        if (!acc[dateStr]) {
+                          acc[dateStr] = { date: dateStr, total_energy_kwh: 0 };
+                        }
+                        acc[dateStr].total_energy_kwh += parseFloat(curr.total_energy_kwh);
+                        return acc;
+                      }, {}))} 
+                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                      <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickFormatter={(val) => val.split('T')[0]} />
+                      <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
                       <YAxis stroke="#94a3b8" fontSize={12} />
                       <RechartsTooltip 
                         contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }}
